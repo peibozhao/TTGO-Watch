@@ -20,6 +20,8 @@ LV_IMG_DECLARE(dial_240x240);
 #define TOUCHBOARD_REST_PORT 14
 #define TOUCHBOARD_I2C_SDA 23
 #define TOUCHBOARD_I2C_SCL 32
+#define TOUCHBOARD_INT 38
+#define AXP202_INT 35
 
 uint8_t LilyGoTWatch2020V3::I2CReadBytes(uint8_t devAddress, uint8_t regAddress,
                                          uint8_t *data, uint8_t len) {
@@ -69,6 +71,12 @@ void LilyGoTWatch2020V3::TouchpadHandler(lv_indev_drv_t *indev_driver,
 
 LilyGoTWatch2020V3 *LilyGoTWatch2020V3::instance_ = nullptr;
 
+LilyGoTWatch2020V3::LilyGoTWatch2020V3() {
+    backlight_level_ = 6;
+    status_ = Status::Sleep;
+    interrupt_ = InterruptType::None;
+}
+
 LilyGoTWatch2020V3 *LilyGoTWatch2020V3::Instance() {
     if (instance_ == nullptr) {
         instance_ = new LilyGoTWatch2020V3();
@@ -92,19 +100,50 @@ void LilyGoTWatch2020V3::Setup() {
     Serial.printf("Init touchboard %d\n", init_touchboard_ret);
 
     rtc_->setDateTime(RTC_Date(__DATE__, __TIME__));
-    power_->setPowerOutPut(AXP202_LDO2, AXP202_ON);
-    backlight_->adjust(6);
+    power_->setPowerOutPut(AXP202_LDO2, AXP202_ON);  // backlight
+    backlight_->adjust(backlight_level_);
     backlight_->on();
 
     // Display
     CreateDisplay();
+
+    // Interrupt
+    pinMode(AXP202_INT, INPUT_PULLUP);
+    attachInterrupt(AXP202_INT,
+                    []() {
+                        LilyGoTWatch2020V3::Instance()->interrupt_ =
+                            InterruptType::PowerButton;
+                    },
+                    FALLING);
+    power_->enableIRQ(AXP202_PEK_SHORTPRESS_IRQ, true);
+    power_->clearIRQ();
+
+    pinMode(TOUCHBOARD_INT, INPUT);
+    attachInterrupt(TOUCHBOARD_INT,
+                    []() {
+                        LilyGoTWatch2020V3::Instance()->interrupt_ =
+                            InterruptType::Touchboard;
+                    },
+                    FALLING);
+
+    Active();
 }
 
 void LilyGoTWatch2020V3::Loop() {
-    long last_time = millis();
+    unsigned long cur_time = millis();
+    ProcessInterrupt();
     lv_task_handler();
     delay(5);
-    lv_tick_inc(int(millis() - last_time));
+    lv_tick_inc(int(millis() - cur_time));
+
+    // Sleep
+    if (cur_time > last_active_time_ + goto_sleep_time_) {
+        Sleep();
+    }
+}
+
+void LilyGoTWatch2020V3::SetWakupBacklightLevel(int level) {
+    backlight_level_ = level;
 }
 
 bool LilyGoTWatch2020V3::InitPower() {
@@ -124,7 +163,8 @@ bool LilyGoTWatch2020V3::InitPower() {
         power_->limitingOff();
         power_->setPowerOutPut(AXP202_LDO4, false);
         power_->setLDO4Voltage(AXP202_LDO4_3300MV);
-        power_->setPowerOutPut(AXP202_LDO4, true);
+        // Audio module
+        // power_->setPowerOutPut(AXP202_LDO4, true);
         power_->setPowerOutPut(AXP202_LDO3, false);
         return true;
     }
@@ -138,7 +178,7 @@ bool LilyGoTWatch2020V3::InitBackLight() {
 
 bool LilyGoTWatch2020V3::InitDisplay() {
     lv_init();
-    tft_->begin();        /* TFT init */
+    tft_->begin(); /* TFT init */
     tft_->setRotation(2);
 
     // uint16_t screen_calibration[] = {275, 3620, 264, 3532, 1};
@@ -185,6 +225,49 @@ bool LilyGoTWatch2020V3::InitTouchboard() {
     }
     return true;
 }
+
+void LilyGoTWatch2020V3::Sleep() {
+    if (status_ != Status::Sleep) {
+        backlight_->adjust(1);
+        setCpuFrequencyMhz(10);
+        status_ = Status::Sleep;
+    }
+}
+
+void LilyGoTWatch2020V3::Active() {
+    last_active_time_ = millis();
+    if (status_ != Status::Active) {
+        setCpuFrequencyMhz(240);
+        backlight_->adjust(backlight_level_);
+        status_ = Status::Active;
+    }
+}
+
+void LilyGoTWatch2020V3::ProcessInterrupt() {
+    switch (interrupt_) {
+    case InterruptType::None:
+        break;
+    case InterruptType::PowerButton:
+        PowerInterrupt();
+        interrupt_ = InterruptType::None;
+        break;
+    case InterruptType::Touchboard:
+        TouchboardInterrupt();
+        interrupt_ = InterruptType::None;
+        break;
+    }
+}
+
+void LilyGoTWatch2020V3::PowerInterrupt() {
+    power_->clearIRQ();
+    if (status_ == Status::Sleep) {
+        Active();
+    } else if (status_ == Status::Active) {
+        Sleep();
+    }
+}
+
+void LilyGoTWatch2020V3::TouchboardInterrupt() { Active(); }
 
 void LilyGoTWatch2020V3::CreateDisplay() {
     std::vector<BackgroundConfig> bg_configs;

@@ -1,5 +1,6 @@
 
 #include "brightness_window.h"
+#include "../../firmware/watch_2020_v3.h"
 
 DEFINIE_SINGLETONE(BrightnessWindow)
 
@@ -37,4 +38,5 @@ void BrightnessWindow::BacklightChangedEventHandler(lv_event_t *event) {
     int16_t value = lv_arc_get_value(this_->arc_);
     lv_label_set_text_fmt(this_->label_, "%d", value);
     this_->backlight_->adjust(value);
+    LilyGoTWatch2020V3::Instance()->SetWakupBacklightLevel(value);
 }

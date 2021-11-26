@@ -37,8 +37,8 @@ void DialSettingWindow::CreateSubWidgets() {
     lv_obj_set_style_grid_row_dsc_array(container_, row_dsc, LV_PART_MAIN);
     lv_obj_set_layout(container_, LV_LAYOUT_GRID);
 
-    for (int timetype = TimeType::Number; timetype <= TimeType::Circle;
-         ++timetype) {
+    for (int timetype = int(TimeType::Number);
+         timetype <= int(TimeType::Circle); ++timetype) {
         int col_idx = timetype % row_count, row_idx = timetype / col_count;
         lv_obj_t *btn = lv_btn_create(container_);
         lv_obj_set_style_shadow_width(btn, 0, LV_PART_MAIN);

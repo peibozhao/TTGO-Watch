@@ -46,9 +46,12 @@ void MenuWindow::Register(const ApplicationConfig &app_config) {
     }
 
     lv_obj_t *btn = lv_btn_create(tiles_.back());
-    lv_obj_set_size(btn, grid_cell_width, grid_cell_height);
+    lv_obj_clear_flag(btn, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_size(btn, grid_cell_width * 3 / 4, grid_cell_height * 3 / 4);
     lv_obj_set_style_bg_opa(btn, LV_OPA_TRANSP, LV_PART_MAIN);
     lv_obj_set_style_shadow_width(btn, 0, LV_PART_MAIN);
+    lv_obj_set_style_border_color(btn, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_border_width(btn, 5, LV_PART_MAIN);
     lv_obj_set_grid_cell(btn, LV_GRID_ALIGN_CENTER, col, 1,
                          LV_GRID_ALIGN_CENTER, row, 1);
 
@@ -59,8 +62,8 @@ void MenuWindow::Register(const ApplicationConfig &app_config) {
 
     if (app_config.click_handler != nullptr) {
         lv_obj_add_flag(btn, LV_OBJ_FLAG_SCROLLABLE);
-        lv_obj_add_event_cb(btn, app_config.click_handler, LV_EVENT_SHORT_CLICKED,
-                            app_config.click_userdata);
+        lv_obj_add_event_cb(btn, app_config.click_handler,
+                            LV_EVENT_SHORT_CLICKED, app_config.click_userdata);
     }
 }
 

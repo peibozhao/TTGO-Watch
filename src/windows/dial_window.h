@@ -12,7 +12,7 @@ struct BackgroundConfig {
     const lv_img_dsc_t *image;
 };
 
-enum TimeType { Number, Clock, Circle };
+enum class TimeType { Number, Clock, Circle };
 
 class DialWindow {
 public:
